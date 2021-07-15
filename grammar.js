@@ -151,23 +151,23 @@ module.exports = grammar({
           "for",
           "(",
           field("initializer", choice($.expression_statement, $.declaration)),
-          optional(
-            field(
-              "condition",
-              choice(
-                $._expression,
-                $.sequence_expression,
-                seq(
-                  $.fully_specified_type,
-                  field("declarator", $.identifier),
-                  "=",
-                  $.initializer
-                )
-              )
-            )
-          ),
+          optional($.condition),
           ";",
           optional(field("update", $._expression))
+        )
+      ),
+    condition: ($) =>
+      field(
+        "condition",
+        choice(
+          $._expression,
+          $.sequence_expression,
+          seq(
+            $.fully_specified_type,
+            field("declarator", $.identifier),
+            "=",
+            $.initializer
+          )
         )
       ),
 
@@ -513,7 +513,7 @@ module.exports = grammar({
         seq(
           field("function", choice($.type_specifier, $._expression)),
           "(",
-          optional("void", $.function_call_parameter_list),
+          optional(seq("void", $.function_call_parameter_list)),
           ")"
         )
       ),
