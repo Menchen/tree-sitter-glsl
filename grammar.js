@@ -27,11 +27,8 @@ module.exports = grammar({
 
   word: ($) => $.identifier,
 
-  extras: ($) => [/[\t\n ]+/, $.comment],
+  extras: ($) => [/\s+/, $.comment],
   rules: {
-    // TODO: add the actual grammar rules
-    // identifier: ($) => /[a-zA-Z_]\w*/,
-
     // TRANSLATION_UNIT        : DECLARATION | FUNCTION_DEFINITON
     translation_unit: ($) => repeat1($._external_declaration),
 
@@ -41,25 +38,98 @@ module.exports = grammar({
         field('body', $.declaration)
       ),
 
+    declaration: ($) =>
+      choice(
+        seq($.function_prototype, ';'),
+        seq($._init_declarator_list, ';'),
+        seq('precision', $.precision_qualifier, $.type_qualifier, ';'),
+        seq(
+          $.type_qualifier,
+          field('declarator', $.identifier),
+          field('body', seq('{', $.struct_declaration_list, '}')),
+          optional(
+            field(
+              'declarator',
+              seq($.identifier, optional($._array_specifier_list))
+            )
+          ),
+          ';'
+        ),
+        seq(
+          $.type_qualifier,
+          optional(
+            seq(
+              field('type', $.identifier),
+              commaSep(field('declarator', $.identifier))
+            )
+          ),
+          ';'
+        )
+      ),
+
+    _init_declarator_list: ($) =>
+      choice(
+        // Single declarator
+        seq(
+          $.fully_specified_type,
+          optional(
+            field('declarator', $.identifier),
+            optional($._array_specifier_list),
+            optional(seq('=', $.initializer))
+          )
+        ),
+        seq(
+          commaSep1(field('declarator', $.identifier)),
+          optional($._array_specifier_list),
+          optional(seq('=', $.initializer))
+        )
+      ),
+
+    initializer: ($) =>
+      choice(
+        $._expression,
+        seq('{', commaSep1($.initializer), optional(','), '}')
+      ),
+
     // FUNCTION_DEFINITION     : FUNCTION_DECLARATION STATEMENT_LIST
     function_definition: ($) =>
       choice(
         seq(
-          field('declarator', $.function_declaration),
-          ')',
-          optional(field('body', $.statement_list))
+          field('declarator', $.function_prototype),
+          optional(field('body', $.compound_statement)) // TODO
         )
       ),
+
+    compound_statement: ($) => seq('{', optional($.statement_list), '}'),
+
+    statement_list: ($) => repeat1($.statement),
+
+    statement: ($) =>
+      choice(
+        $.compound_statement,
+        $.declaration,
+        $.expression_statement, // TODO
+        $.selection_statement, // TODO
+        $.switch_statement, // TODO
+        $.case_label, // TODO
+        $.iteration_statement, // TODO
+        $.jump_statement // TODO
+      ),
+
+    function_prototype: ($) => seq($.function_declaration, ')'),
 
     // FUNCTION_DECLARATION    : FUNCTION_HEADER FUNCTION_PARAMETER_LIST
     // FUNCTION_HEADER         : FULLY_SPECIFIED_TYPE IDENTIFIER
     function_declaration: ($) =>
       seq(
-        field('type', $.fully_specified_type), // TODO
+        field('type', $.fully_specified_type),
         field('name', $.identifier),
         '(',
         optional(field('parameters', $.function_parameter_list))
       ),
+
+    fully_specified_type: ($) =>
+      seq(optional($.type_qualifier_list), $.type_specifier),
 
     // FUNCTION_PARAMETER_LIST : PARAMETER_DECLARATION ...
     function_parameter_list: ($) => commaSep1($.parameter_declaration),
@@ -77,7 +147,7 @@ module.exports = grammar({
       ),
 
     _array_specifier_list: ($) =>
-      repeat1(choice('[]', seq('[', $.constant_expression, ']'))),
+      repeat1(choice('[]', seq('[', $._constant_expression, ']'))),
 
     _field_declarator: ($) => choice($.identifier, $.array_declarator),
 
@@ -232,10 +302,11 @@ module.exports = grammar({
         field('declarator', $.struct_declarator_list),
         ';'
       ),
-    struct_declarator_list: ($) =>
-      seq($.struct_declarator, optional(seq(',', $.struct_declarator_list))),
+    struct_declarator_list: ($) => commaSep1($.struct_declarator),
+    // seq($.struct_declarator, optional(seq(',', $.struct_declarator_list))),
 
     struct_declarator: ($) => $._field_declarator,
+
     type_qualifier_list: ($) => repeat1($.type_qualifier),
 
     type_qualifier: ($) =>
@@ -265,8 +336,9 @@ module.exports = grammar({
         'readonly',
         'writeonly',
         'subroutine',
-        seq('subroutine', '(', type_name_list, ')')
+        seq('subroutine', '(', $.type_name_list, ')')
       ),
+    type_name_list: ($) => commaSep1($.identifier),
 
     layout_qualifier: ($) =>
       seq(
@@ -279,7 +351,7 @@ module.exports = grammar({
       choice(
         seq(
           field('declarator', $.identifier),
-          optional(seq('=', field('value', $.constant_expression)))
+          optional(seq('=', field('value', $._constant_expression)))
         ),
         'shared'
       ),
@@ -288,7 +360,6 @@ module.exports = grammar({
     invariant_qualifier: ($) => 'invariant',
     precise_qualifier: ($) => 'precise',
 
-    // TODO: constant expression
     binary_expression: ($) =>
       choice(
         ...[
@@ -314,9 +385,9 @@ module.exports = grammar({
           prec.left(
             precedence,
             seq(
-              field('left', $.expression),
+              field('left', $._expression),
               field('operator', operator),
-              field('right', $.expression)
+              field('right', $._expression)
             )
           )
         )
@@ -332,7 +403,7 @@ module.exports = grammar({
         ].map(([operator, precedence]) =>
           prec.right(
             precedence,
-            seq(field('operator', operator), field('operand', $.expression))
+            seq(field('operator', operator), field('operand', $._expression))
           )
         )
       ),
@@ -341,64 +412,142 @@ module.exports = grammar({
       choice(
         prec.right(
           PREC.PREFIX,
-          choice(seq('++', $.expression), seq('--', $.expression))
+          choice(seq('++', $._expression), seq('--', $._expression))
         ),
         prec.left(
           PREC.POSTFIX,
-          choice(seq($.expression, '++'), seq($.expression, '--'))
+          choice(seq($._expression, '++'), seq($._expression, '--'))
         )
       ),
+    sequence_expression: ($) =>
+      prec(PREC.SEQUENCE, seq('(', $.comma_expression, ')')),
 
-    array_access: ($) =>
+    parenthesized_expression: ($) =>
+      prec(PREC.GROUPING, seq('(', $._expression, ')')),
+
+    subscript_expression: ($) =>
       prec.left(
         PREC.SUBSCRIPT,
         seq(
-          field('array', $.primary_expression),
+          field('array', $._expression),
           '[',
-          field('index', $.expression),
+          field('index', $.comma_expression),
           ']'
         )
       ),
 
-    field_access: ($) =>
+    field_expression: ($) =>
       prec.left(
         PREC.FIELD,
+        seq(field('argument', $._expression), '.', field('field', $.identifier))
+      ),
+
+    call_expression: ($) =>
+      prec.left(
+        PREC.CALL,
         seq(
-          field('object', $.primary_expression),
-          '.',
-          field('field', $.identifier)
+          field('function', choice($.type_specifier, $._expression)),
+          '(',
+          optional('void', $.function_call_parameter_list),
+          ')'
         )
       ),
 
-    function_call: ($) =>
-      seq(
-        field('function', choice($.type_specifier, $.primary_expression)),
-        '(',
-        optional('void', $.function_call_parameter_list),
-        ')'
+    comma_expression: ($) => commaSep1($._expression),
+
+    function_call_parameter_list: ($) => commaSep1($._expression),
+
+    assignment_expression: ($) =>
+      prec.right(
+        PREC.ASSIGNMENT,
+        seq(
+          field('left', $._assignment_left_expression),
+          field(
+            'operator',
+            choice(
+              '=',
+              '+=',
+              '-=',
+              '*=',
+              '/=',
+              '%=',
+              '<<=',
+              '>>=',
+              '&=',
+              '^=',
+              '|='
+            )
+          ),
+          field('right', $._expression)
+        )
+      ),
+    conditional_expression: ($) =>
+      prec.right(
+        PREC.SELECTION,
+        seq(
+          field('condition', $._expression),
+          '?',
+          field('consequence', $._expression),
+          ':',
+          field('alternative', $._expression)
+        )
       ),
 
-    function_call_parameter_list: ($) => seq(),
+    _expression: ($) => choice($.assignment_expression, $._constant_expression),
 
-    // DECLARATION             : INIT_DECLARATOR_LIST | BLOCK_DECLARATION | FUNCTION_DECLARATION
-    _declaration: ($) =>
+    _constant_expression: ($) =>
       choice(
-        $._init_declarator_list,
-        $._block_declaration,
-        $.function_declaration
+        $.unary_expression,
+        $.update_expression,
+        $.binary_expression,
+        $.call_expression,
+        $.field_expression,
+        $.conditional_expression,
+        $.subscript_expression,
+        $.parenthesized_expression,
+        $.sequence_expression,
+        $.identifier,
+        $.number_literal,
+        'true',
+        'false'
+      ),
+    _assignment_left_expression: ($) =>
+      choice(
+        $.call_expression,
+        $.field_expression,
+        $.subscript_expression,
+        $.unary_expression,
+        $.update_expression,
+        $.parenthesized_expression,
+        $.identifier,
+        $.number_literal,
+        'true',
+        'false'
       ),
 
-    integer_constant: ($) => /[0-9]+/,
-    floating_constant: ($) => /[0-9]+\.[0-9]+/,
+    // https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#integers
+    // https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#floats
+    number_literal: ($) =>
+      choice(
+        /[1-9][0-9]*[uU]?/,
+        /[0-7]+[uU]?/,
+        /0[xX][0-9a-fA-F]+/,
+        /[0-9]\.[0-9]([eE][-+]?[0-9]+)?([lL]?[fF])?/,
+        /[0-9]\.([eE][-+]?[0-9]+)?([lL]?[fF])?/,
+        /\.[0-9]([eE][-+]?[0-9]+)?([lL]?[fF])?/
+      ),
 
+    // floating_constant: ($) => /[0-9]+\.[0-9]+/,
+
+    // https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#comments
     comment: ($) =>
       token(
         prec(
           PREC.COMMENT,
           choice(
+            seq('//', /(.*?\\\n|.*)*/),
             seq('/*', /[^*]*\*+([^/*][^*]*\*+)*/, '/'),
-            seq('#', /.*/, '\n'),
-            seq('//', /.*/, '\n')
+            seq('#', /.*/) // TODO add preprocessor
           )
         )
       ),
