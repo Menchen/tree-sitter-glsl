@@ -23,7 +23,7 @@ const PREC = {
   GROUPING: 20, // ()
 };
 module.exports = grammar({
-  name: 'glsl',
+  name: "glsl",
 
   word: ($) => $.identifier,
 
@@ -34,36 +34,36 @@ module.exports = grammar({
 
     _external_declaration: ($) =>
       choice(
-        field('declarator', $.function_definition),
-        field('body', $.declaration)
+        field("declarator", $.function_definition),
+        field("body", $.declaration)
       ),
 
     declaration: ($) =>
       choice(
-        seq($.function_prototype, ';'),
-        seq($._init_declarator_list, ';'),
-        seq('precision', $.precision_qualifier, $.type_qualifier, ';'),
+        seq($.function_prototype, ";"),
+        seq($._init_declarator_list, ";"),
+        seq("precision", $.precision_qualifier, $.type_qualifier, ";"),
         seq(
           $.type_qualifier,
-          field('declarator', $.identifier),
-          field('body', seq('{', $.struct_declaration_list, '}')),
+          field("declarator", $.identifier),
+          field("body", seq("{", $.struct_declaration_list, "}")),
           optional(
             field(
-              'declarator',
+              "declarator",
               seq($.identifier, optional($._array_specifier_list))
             )
           ),
-          ';'
+          ";"
         ),
         seq(
           $.type_qualifier,
           optional(
             seq(
-              field('type', $.identifier),
-              commaSep(field('declarator', $.identifier))
+              field("type", $.identifier),
+              commaSep(field("declarator", $.identifier))
             )
           ),
-          ';'
+          ";"
         )
       ),
 
@@ -73,34 +73,36 @@ module.exports = grammar({
         seq(
           $.fully_specified_type,
           optional(
-            field('declarator', $.identifier),
-            optional($._array_specifier_list),
-            optional(seq('=', $.initializer))
+            seq(
+              field("declarator", $.identifier),
+              optional($._array_specifier_list),
+              optional(seq("=", $.initializer))
+            )
           )
         ),
         seq(
-          commaSep1(field('declarator', $.identifier)),
+          commaSep1(field("declarator", $.identifier)),
           optional($._array_specifier_list),
-          optional(seq('=', $.initializer))
+          optional(seq("=", $.initializer))
         )
       ),
 
     initializer: ($) =>
       choice(
         $._expression,
-        seq('{', commaSep1($.initializer), optional(','), '}')
+        seq("{", commaSep1($.initializer), optional(","), "}")
       ),
 
     // FUNCTION_DEFINITION     : FUNCTION_DECLARATION STATEMENT_LIST
     function_definition: ($) =>
       choice(
         seq(
-          field('declarator', $.function_prototype),
-          optional(field('body', $.compound_statement)) // TODO
+          field("declarator", $.function_prototype),
+          optional(field("body", $.compound_statement)) // TODO
         )
       ),
 
-    compound_statement: ($) => seq('{', optional($.statement_list), '}'),
+    compound_statement: ($) => seq("{", optional($.statement_list), "}"),
 
     statement_list: ($) => repeat1($.statement),
 
@@ -108,24 +110,87 @@ module.exports = grammar({
       choice(
         $.compound_statement,
         $.declaration,
-        $.expression_statement, // TODO
-        $.selection_statement, // TODO
-        $.switch_statement, // TODO
-        $.case_label, // TODO
-        $.iteration_statement, // TODO
-        $.jump_statement // TODO
+        $.expression_statement,
+        $.if_statement,
+        $.switch_statement,
+        $.case_label,
+        $.iteration_statement,
+        $.jump_statement
       ),
 
-    function_prototype: ($) => seq($.function_declaration, ')'),
+    expression_statement: ($) => seq(optional($._expression), ";"),
+
+    if_statement: ($) =>
+      prec.right(
+        seq(
+          "if",
+          "(",
+          field("condition", $._expression),
+          ")",
+          field("consequence", $.statement),
+          optional(seq("else", field("alternative", $.statement)))
+        )
+      ),
+
+    switch_statement: ($) =>
+      seq(
+        "switch",
+        "(",
+        field("condition", $._expression),
+        ")",
+        "{",
+        optional(field("body", $.statement_list)),
+        "}"
+      ),
+
+    iteration_statement: ($) =>
+      choice(
+        seq("while", "(", $.condition, ")", $.statement),
+        seq("do", $.statement, "while", "(", $._expression, ")", ";"),
+        seq(
+          "for",
+          "(",
+          field("initializer", choice($.expression_statement, $.declaration)),
+          optional(
+            field(
+              "condition",
+              choice(
+                $._expression,
+                $.sequence_expression,
+                seq(
+                  $.fully_specified_type,
+                  field("declarator", $.identifier),
+                  "=",
+                  $.initializer
+                )
+              )
+            )
+          ),
+          ";",
+          optional(field("update", $._expression))
+        )
+      ),
+
+    jump_statement: ($) =>
+      choice(
+        seq("continue", ";"),
+        seq("break", ";"),
+        seq("return", optional($._expression), ";"),
+        seq("discard", ";")
+      ),
+
+    function_prototype: ($) => seq($.function_declaration, ")"),
+    case_label: ($) =>
+      choice(seq("case", $._expression, ";"), seq("default", ";")),
 
     // FUNCTION_DECLARATION    : FUNCTION_HEADER FUNCTION_PARAMETER_LIST
     // FUNCTION_HEADER         : FULLY_SPECIFIED_TYPE IDENTIFIER
     function_declaration: ($) =>
       seq(
-        field('type', $.fully_specified_type),
-        field('name', $.identifier),
-        '(',
-        optional(field('parameters', $.function_parameter_list))
+        field("type", $.fully_specified_type),
+        field("name", $.identifier),
+        "(",
+        optional(field("parameters", $.function_parameter_list))
       ),
 
     fully_specified_type: ($) =>
@@ -136,23 +201,23 @@ module.exports = grammar({
     // PARAMETER_DECLARATION   : TYPE_QUALIFIER_LIST PARAMETER_DECLARATOR
     parameter_declaration: ($) =>
       seq(
-        optional(field('type', $.type_qualifier_list)),
-        field('declarator', choice($.parameter_declarator, $.type_specifier))
+        optional(field("type", $.type_qualifier_list)),
+        field("declarator", choice($.parameter_declarator, $.type_specifier))
       ),
     // PARAMETER_DECLARATOR    : TYPE_SPECIFIER IDENTIFIER ARRAY_SPECIFIER_LIST
     parameter_declarator: ($) =>
       seq(
-        field('type', $.type_specifier),
-        field('declarator', $._field_declarator)
+        field("type", $.type_specifier),
+        field("declarator", $._field_declarator)
       ),
 
     _array_specifier_list: ($) =>
-      repeat1(choice('[]', seq('[', $._constant_expression, ']'))),
+      repeat1(choice("[]", seq("[", $._constant_expression, "]"))),
 
     _field_declarator: ($) => choice($.identifier, $.array_declarator),
 
     array_declarator: ($) =>
-      seq(field('declarator', $.identifier), $._array_specifier_list),
+      seq(field("declarator", $.identifier), $._array_specifier_list),
 
     type_specifier: ($) =>
       seq($.primitive_type, optional($._array_specifier_list)),
@@ -161,136 +226,136 @@ module.exports = grammar({
       choice(
         $.primitive_type,
         seq(
-          'struct',
-          optional(field('declarator', $.identifier)),
-          '{',
-          field('body', $.struct_declaration_list),
-          '}'
+          "struct",
+          optional(field("declarator", $.identifier)),
+          "{",
+          field("body", $.struct_declaration_list),
+          "}"
         ),
         $.identifier
       ),
 
     primitive_type: ($) =>
       choice(
-        'void',
-        'float',
-        'double',
-        'int',
-        'uint',
-        'bool',
-        'vec2',
-        'vec3',
-        'vec4',
-        'dvec2',
-        'dvec3',
-        'dvec4',
-        'bvec2',
-        'bvec3',
-        'bvec4',
-        'ivec2',
-        'ivec3',
-        'ivec4',
-        'uvec2',
-        'uvec3',
-        'uvec4',
-        'mat2',
-        'mat3',
-        'mat4',
-        'mat2x2',
-        'mat2x3',
-        'mat2x4',
-        'mat3x2',
-        'mat3x3',
-        'mat3x4',
-        'mat4x2',
-        'mat4x3',
-        'mat4x4',
-        'dmat2',
-        'dmat3',
-        'dmat4',
-        'dmat2x2',
-        'dmat2x3',
-        'dmat2x4',
-        'dmat3x2',
-        'dmat3x3',
-        'dmat3x4',
-        'dmat4x2',
-        'dmat4x3',
-        'dmat4x4',
-        'atomic_uint',
-        'sampler1d',
-        'sampler2d',
-        'sampler3d',
-        'samplercube',
-        'sampler1DShadow',
-        'sampler2DShadow',
-        'samplerCubeShadow',
-        'sampler1DArray',
-        'sampler2DArray',
-        'sampler1DArrayShadow',
-        'sampler2DArrayShadow',
-        'samplerCubeArray',
-        'samplerCubeArrayShadow',
-        'isampler1D',
-        'isampler2D',
-        'isampler3D',
-        'isamplerCube',
-        'isampler1DArray',
-        'isampler2DArray',
-        'isamplerCubeArray',
-        'usampler1D',
-        'usampler2D',
-        'usampler3D',
-        'usamplerCube',
-        'usampler1DArray',
-        'usampler2DArray',
-        'usamplerCubeArray',
-        'sampler2DRect',
-        'sampler2DRectshadow',
-        'isampler2DRect',
-        'usampler2DRect',
-        'samplerBuffer',
-        'isamplerBuffer',
-        'usamplerBuffer',
-        'sampler2DMS',
-        'isampler2DMS',
-        'usampler2DMS',
-        'sampler2DMSArray',
-        'isampler2DMSArray',
-        'usampler2DMSArray',
-        'image1D',
-        'iimage1D',
-        'uimage1D',
-        'image2D',
-        'iimage2D',
-        'uimage2D',
-        'image3D',
-        'iimage3D',
-        'uimage3D',
-        'image2DRect',
-        'iimage2DRect',
-        'uimage2DRect',
-        'imageCube',
-        'iimageCube',
-        'uimageCube',
-        'imageBuffer',
-        'iimageBuffer',
-        'uimageBuffer',
-        'image1DArray',
-        'iimage1DArray',
-        'uimage1DArray',
-        'image2DArray',
-        'iimage2DArray',
-        'uimage2DArray',
-        'imageCubeArray',
-        'iimageCubeArray',
-        'uimageCubeArray',
-        'image2DMS',
-        'iimage2DMS',
-        'uimage2DMS',
-        'image2DMSArray',
-        'iimage2DMSArray',
-        'uimage2DMSArray'
+        "void",
+        "float",
+        "double",
+        "int",
+        "uint",
+        "bool",
+        "vec2",
+        "vec3",
+        "vec4",
+        "dvec2",
+        "dvec3",
+        "dvec4",
+        "bvec2",
+        "bvec3",
+        "bvec4",
+        "ivec2",
+        "ivec3",
+        "ivec4",
+        "uvec2",
+        "uvec3",
+        "uvec4",
+        "mat2",
+        "mat3",
+        "mat4",
+        "mat2x2",
+        "mat2x3",
+        "mat2x4",
+        "mat3x2",
+        "mat3x3",
+        "mat3x4",
+        "mat4x2",
+        "mat4x3",
+        "mat4x4",
+        "dmat2",
+        "dmat3",
+        "dmat4",
+        "dmat2x2",
+        "dmat2x3",
+        "dmat2x4",
+        "dmat3x2",
+        "dmat3x3",
+        "dmat3x4",
+        "dmat4x2",
+        "dmat4x3",
+        "dmat4x4",
+        "atomic_uint",
+        "sampler1d",
+        "sampler2d",
+        "sampler3d",
+        "samplercube",
+        "sampler1DShadow",
+        "sampler2DShadow",
+        "samplerCubeShadow",
+        "sampler1DArray",
+        "sampler2DArray",
+        "sampler1DArrayShadow",
+        "sampler2DArrayShadow",
+        "samplerCubeArray",
+        "samplerCubeArrayShadow",
+        "isampler1D",
+        "isampler2D",
+        "isampler3D",
+        "isamplerCube",
+        "isampler1DArray",
+        "isampler2DArray",
+        "isamplerCubeArray",
+        "usampler1D",
+        "usampler2D",
+        "usampler3D",
+        "usamplerCube",
+        "usampler1DArray",
+        "usampler2DArray",
+        "usamplerCubeArray",
+        "sampler2DRect",
+        "sampler2DRectshadow",
+        "isampler2DRect",
+        "usampler2DRect",
+        "samplerBuffer",
+        "isamplerBuffer",
+        "usamplerBuffer",
+        "sampler2DMS",
+        "isampler2DMS",
+        "usampler2DMS",
+        "sampler2DMSArray",
+        "isampler2DMSArray",
+        "usampler2DMSArray",
+        "image1D",
+        "iimage1D",
+        "uimage1D",
+        "image2D",
+        "iimage2D",
+        "uimage2D",
+        "image3D",
+        "iimage3D",
+        "uimage3D",
+        "image2DRect",
+        "iimage2DRect",
+        "uimage2DRect",
+        "imageCube",
+        "iimageCube",
+        "uimageCube",
+        "imageBuffer",
+        "iimageBuffer",
+        "uimageBuffer",
+        "image1DArray",
+        "iimage1DArray",
+        "uimage1DArray",
+        "image2DArray",
+        "iimage2DArray",
+        "uimage2DArray",
+        "imageCubeArray",
+        "iimageCubeArray",
+        "uimageCubeArray",
+        "image2DMS",
+        "iimage2DMS",
+        "uimage2DMS",
+        "image2DMSArray",
+        "iimage2DMSArray",
+        "uimage2DMSArray"
       ),
 
     struct_declaration_list: ($) => repeat1($.struct_declaration),
@@ -298,9 +363,9 @@ module.exports = grammar({
     struct_declaration: ($) =>
       seq(
         optional($.type_qualifier_list),
-        field('type', $.type_specifier),
-        field('declarator', $.struct_declarator_list),
-        ';'
+        field("type", $.type_specifier),
+        field("declarator", $.struct_declarator_list),
+        ";"
       ),
     struct_declarator_list: ($) => commaSep1($.struct_declarator),
     // seq($.struct_declarator, optional(seq(',', $.struct_declarator_list))),
@@ -320,74 +385,74 @@ module.exports = grammar({
       ),
     storage_qualifier: ($) =>
       choice(
-        'const',
-        'inout',
-        'in',
-        'out',
-        'centroid',
-        'patch',
-        'sample',
-        'uniform',
-        'buffer',
-        'shared',
-        'coherent',
-        'volatile',
-        'restrict',
-        'readonly',
-        'writeonly',
-        'subroutine',
-        seq('subroutine', '(', $.type_name_list, ')')
+        "const",
+        "inout",
+        "in",
+        "out",
+        "centroid",
+        "patch",
+        "sample",
+        "uniform",
+        "buffer",
+        "shared",
+        "coherent",
+        "volatile",
+        "restrict",
+        "readonly",
+        "writeonly",
+        "subroutine",
+        seq("subroutine", "(", $.type_name_list, ")")
       ),
     type_name_list: ($) => commaSep1($.identifier),
 
     layout_qualifier: ($) =>
       seq(
-        'LAYOUT',
-        '(',
-        seq($.layout_qualifier_id, repeat(seq(',', $.layout_qualifier_id))),
-        ')'
+        "LAYOUT",
+        "(",
+        seq($.layout_qualifier_id, repeat(seq(",", $.layout_qualifier_id))),
+        ")"
       ),
     layout_qualifier_id: ($) =>
       choice(
         seq(
-          field('declarator', $.identifier),
-          optional(seq('=', field('value', $._constant_expression)))
+          field("declarator", $.identifier),
+          optional(seq("=", field("value", $._constant_expression)))
         ),
-        'shared'
+        "shared"
       ),
-    precision_qualifier: ($) => choice('highp', 'mediump', 'lowp'),
-    interpolation_qualifier: ($) => choice('smooth', 'flat', 'noperspective'),
-    invariant_qualifier: ($) => 'invariant',
-    precise_qualifier: ($) => 'precise',
+    precision_qualifier: ($) => choice("highp", "mediump", "lowp"),
+    interpolation_qualifier: ($) => choice("smooth", "flat", "noperspective"),
+    invariant_qualifier: ($) => "invariant",
+    precise_qualifier: ($) => "precise",
 
     binary_expression: ($) =>
       choice(
         ...[
-          ['>', PREC.RELATIONAL],
-          ['<', PREC.RELATIONAL],
-          ['>=', PREC.RELATIONAL],
-          ['<=', PREC.RELATIONAL],
-          ['==', PREC.EQUALITY],
-          ['!=', PREC.EQUALITY],
-          ['&&', PREC.LOGICAL_AND],
-          ['||', PREC.LOGICAL_OR],
-          ['+', PREC.ADDDITIVE],
-          ['-', PREC.ADDDITIVE],
-          ['*', PREC.MULTIPLICATIVE],
-          ['/', PREC.MULTIPLICATIVE],
-          ['&', PREC.BITWISE_AND],
-          ['|', PREC.INCLUSIVE_OR],
-          ['^', PREC.EXCLUSIVE_OR],
-          ['%', PREC.MULTIPLICATIVE],
-          ['<<', PREC.SHIFT],
-          ['>>', PREC.SHIFT],
+          [">", PREC.RELATIONAL],
+          ["<", PREC.RELATIONAL],
+          [">=", PREC.RELATIONAL],
+          ["<=", PREC.RELATIONAL],
+          ["==", PREC.EQUALITY],
+          ["!=", PREC.EQUALITY],
+          ["&&", PREC.LOGICAL_AND],
+          ["||", PREC.LOGICAL_OR],
+          ["+", PREC.ADDDITIVE],
+          ["-", PREC.ADDDITIVE],
+          ["*", PREC.MULTIPLICATIVE],
+          ["/", PREC.MULTIPLICATIVE],
+          ["&", PREC.BITWISE_AND],
+          ["|", PREC.INCLUSIVE_OR],
+          ["^", PREC.EXCLUSIVE_OR],
+          ["%", PREC.MULTIPLICATIVE],
+          ["<<", PREC.SHIFT],
+          [">>", PREC.SHIFT],
         ].map(([operator, precedence]) =>
           prec.left(
             precedence,
             seq(
-              field('left', $._expression),
-              field('operator', operator),
-              field('right', $._expression)
+              field("left", $._expression),
+              field("operator", operator),
+              field("right", $._expression)
             )
           )
         )
@@ -396,14 +461,14 @@ module.exports = grammar({
     unary_expression: ($) =>
       choice(
         ...[
-          ['+', PREC.UNARY],
-          ['-', PREC.UNARY],
-          ['!', PREC.UNARY],
-          ['~', PREC.UNARY],
+          ["+", PREC.UNARY],
+          ["-", PREC.UNARY],
+          ["!", PREC.UNARY],
+          ["~", PREC.UNARY],
         ].map(([operator, precedence]) =>
           prec.right(
             precedence,
-            seq(field('operator', operator), field('operand', $._expression))
+            seq(field("operator", operator), field("operand", $._expression))
           )
         )
       ),
@@ -412,44 +477,44 @@ module.exports = grammar({
       choice(
         prec.right(
           PREC.PREFIX,
-          choice(seq('++', $._expression), seq('--', $._expression))
+          choice(seq("++", $._expression), seq("--", $._expression))
         ),
         prec.left(
           PREC.POSTFIX,
-          choice(seq($._expression, '++'), seq($._expression, '--'))
+          choice(seq($._expression, "++"), seq($._expression, "--"))
         )
       ),
     sequence_expression: ($) =>
-      prec(PREC.SEQUENCE, seq('(', $.comma_expression, ')')),
+      prec(PREC.SEQUENCE, seq("(", $.comma_expression, ")")),
 
     parenthesized_expression: ($) =>
-      prec(PREC.GROUPING, seq('(', $._expression, ')')),
+      prec(PREC.GROUPING, seq("(", $._expression, ")")),
 
     subscript_expression: ($) =>
       prec.left(
         PREC.SUBSCRIPT,
         seq(
-          field('array', $._expression),
-          '[',
-          field('index', $.comma_expression),
-          ']'
+          field("array", $._expression),
+          "[",
+          field("index", $.comma_expression),
+          "]"
         )
       ),
 
     field_expression: ($) =>
       prec.left(
         PREC.FIELD,
-        seq(field('argument', $._expression), '.', field('field', $.identifier))
+        seq(field("argument", $._expression), ".", field("field", $.identifier))
       ),
 
     call_expression: ($) =>
       prec.left(
         PREC.CALL,
         seq(
-          field('function', choice($.type_specifier, $._expression)),
-          '(',
-          optional('void', $.function_call_parameter_list),
-          ')'
+          field("function", choice($.type_specifier, $._expression)),
+          "(",
+          optional("void", $.function_call_parameter_list),
+          ")"
         )
       ),
 
@@ -461,39 +526,44 @@ module.exports = grammar({
       prec.right(
         PREC.ASSIGNMENT,
         seq(
-          field('left', $._assignment_left_expression),
+          field("left", $._assignment_left_expression),
           field(
-            'operator',
+            "operator",
             choice(
-              '=',
-              '+=',
-              '-=',
-              '*=',
-              '/=',
-              '%=',
-              '<<=',
-              '>>=',
-              '&=',
-              '^=',
-              '|='
+              "=",
+              "+=",
+              "-=",
+              "*=",
+              "/=",
+              "%=",
+              "<<=",
+              ">>=",
+              "&=",
+              "^=",
+              "|="
             )
           ),
-          field('right', $._expression)
+          field("right", $._expression)
         )
       ),
     conditional_expression: ($) =>
       prec.right(
         PREC.SELECTION,
         seq(
-          field('condition', $._expression),
-          '?',
-          field('consequence', $._expression),
-          ':',
-          field('alternative', $._expression)
+          field("condition", $._expression),
+          "?",
+          field("consequence", $._expression),
+          ":",
+          field("alternative", $._expression)
         )
       ),
 
-    _expression: ($) => choice($.assignment_expression, $._constant_expression),
+    _expression: ($) =>
+      choice(
+        $.assignment_expression,
+        $._constant_expression,
+        $.comma_expression
+      ),
 
     _constant_expression: ($) =>
       choice(
@@ -508,8 +578,8 @@ module.exports = grammar({
         $.sequence_expression,
         $.identifier,
         $.number_literal,
-        'true',
-        'false'
+        "true",
+        "false"
       ),
     _assignment_left_expression: ($) =>
       choice(
@@ -521,8 +591,8 @@ module.exports = grammar({
         $.parenthesized_expression,
         $.identifier,
         $.number_literal,
-        'true',
-        'false'
+        "true",
+        "false"
       ),
 
     // https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#integers
@@ -545,9 +615,9 @@ module.exports = grammar({
         prec(
           PREC.COMMENT,
           choice(
-            seq('//', /(.*?\\\n|.*)*/),
-            seq('/*', /[^*]*\*+([^/*][^*]*\*+)*/, '/'),
-            seq('#', /.*/) // TODO add preprocessor
+            seq("//", /(.*?\\\n|.*)*/),
+            seq("/*", /[^*]*\*+([^/*][^*]*\*+)*/, "/"),
+            seq("#", /.*/) // TODO add preprocessor
           )
         )
       ),
@@ -560,9 +630,9 @@ function commaSep(rule) {
 }
 
 function commaSep1(rule) {
-  return seq(rule, repeat(seq(',', rule)));
+  return seq(rule, repeat(seq(",", rule)));
 }
 
 function commaSepTrailing(recurSymbol, rule) {
-  return choice(rule, seq(recurSymbol, ',', rule));
+  return choice(rule, seq(recurSymbol, ",", rule));
 }
