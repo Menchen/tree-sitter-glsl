@@ -3,9 +3,11 @@ WIP Treesitter parser for GLSL
 
 
 # Current status:
-Compile without conflict and can generate tree without error, but more test is still needed.
-Also some refactor for node name is needed.
-Highlight support
+[ ]Compile without conflict and can generate tree without error, but more test is still needed.
+[ ]Also some refactor for node name is needed.
+[ ]Highlight support.
+[ ]Preprocessors support.
+
 
 # References: 
 [GLSL Grammar/specification](https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#shading-language-grammar)
