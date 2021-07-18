@@ -1082,6 +1082,10 @@
         {
           "type": "type_qualifier_list",
           "named": true
+        },
+        {
+          "type": "type_specifier",
+          "named": true
         }
       ]
     }

@@ -58,7 +58,7 @@ module.exports = grammar({
       choice(
         seq($.function_prototype, ";"),
         seq($._init_declarator_list, ";"),
-        seq("precision", $.precision_qualifier, $.type_qualifier_list, ";"),
+        seq("precision", $.precision_qualifier, $.type_specifier, ";"),
 
         seq(
           $.type_qualifier_list,
@@ -249,7 +249,7 @@ module.exports = grammar({
 
     type_specifier: ($) =>
       prec(
-        -1,
+        -1, // TODO refactor using a constant
         seq($._type_specifier_nonarray, optional($._array_specifier_list))
       ),
 
