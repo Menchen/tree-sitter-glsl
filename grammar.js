@@ -27,6 +27,20 @@ module.exports = grammar({
 
   word: ($) => $.identifier,
 
+  conflicts: ($) => [
+    // [$._init_declarator_list, $._assignment_left_expression],
+    // [$.layout_qualifier_id, $._expression],
+    // [$._initializer, $._expression],
+    // [$._expression, $.layout_qualifier_id],
+    // [$.declaration, $._type_specifier_nonarray],
+    [$.declaration, $.type_specifier], // ??
+    // [$._assignment_left_expression, $.type_specifier],
+    // [$._initializer, $._expression],
+    // [$._assignment_left_expression, $._type_specifier_nonarray],
+  ], // TODO ??
+
+  inline: ($) => [$._type_specifier_nonarray],
+
   extras: ($) => [/\s+/, $.comment],
   rules: {
     // TRANSLATION_UNIT        : DECLARATION | FUNCTION_DEFINITON
@@ -39,58 +53,64 @@ module.exports = grammar({
       ),
 
     declaration: ($) =>
+      // prec(
+      //   PREC.DEFAULT,
       choice(
         seq($.function_prototype, ";"),
         seq($._init_declarator_list, ";"),
-        seq("precision", $.precision_qualifier, $.type_qualifier, ";"),
+        seq("precision", $.precision_qualifier, $.type_qualifier_list, ";"),
+
         seq(
-          $.type_qualifier,
+          $.type_qualifier_list,
           field("declarator", $.identifier),
           field("body", seq("{", $.struct_declaration_list, "}")),
-          optional(
-            field(
-              "declarator",
-              seq($.identifier, optional($._array_specifier_list))
-            )
-          ),
+          optional(field("declarator", $._field_declarator)),
           ";"
         ),
+
         seq(
-          $.type_qualifier,
+          $.type_qualifier_list,
           optional(
             seq(
               field("type", $.identifier),
-              commaSep(field("declarator", $.identifier))
+              field("declarator", repeat1(prec.right(seq(",", $.identifier))))
             )
           ),
           ";"
         )
+        // )
       ),
 
     _init_declarator_list: ($) =>
+      // prec.right(
+      //   PREC.ASSIGNMENT,
       choice(
         // Single declarator
         seq(
           $.fully_specified_type,
           optional(
             seq(
-              field("declarator", $.identifier),
-              optional($._array_specifier_list),
-              optional(seq("=", $.initializer))
+              field("declarator", $._field_declarator),
+              optional(seq("=", field("value", $._initializer)))
             )
           )
         ),
         seq(
-          commaSep1(field("declarator", $.identifier)),
-          optional($._array_specifier_list),
-          optional(seq("=", $.initializer))
+          $._init_declarator_list,
+          ",",
+          field("declarator", $._field_declarator),
+          optional(seq("=", field("value", $._initializer)))
+          // )
         )
       ),
 
-    initializer: ($) =>
+    _initializer: ($) =>
+      // prec(
+      //   -1,
       choice(
         $._expression,
-        seq("{", commaSep1($.initializer), optional(","), "}")
+        seq("{", commaSep1($._initializer), optional(","), "}")
+        // )
       ),
 
     // FUNCTION_DEFINITION     : FUNCTION_DECLARATION STATEMENT_LIST
@@ -104,9 +124,9 @@ module.exports = grammar({
 
     compound_statement: ($) => seq("{", optional($.statement_list), "}"),
 
-    statement_list: ($) => repeat1($.statement),
+    statement_list: ($) => repeat1($._statement),
 
-    statement: ($) =>
+    _statement: ($) =>
       choice(
         $.compound_statement,
         $.declaration,
@@ -127,8 +147,8 @@ module.exports = grammar({
           "(",
           field("condition", $._expression),
           ")",
-          field("consequence", $.statement),
-          optional(seq("else", field("alternative", $.statement)))
+          field("consequence", $._statement),
+          optional(seq("else", field("alternative", $._statement)))
         )
       ),
 
@@ -145,15 +165,17 @@ module.exports = grammar({
 
     iteration_statement: ($) =>
       choice(
-        seq("while", "(", $.condition, ")", $.statement),
-        seq("do", $.statement, "while", "(", $._expression, ")", ";"),
+        seq("while", "(", $.condition, ")", $._statement),
+        seq("do", $._statement, "while", "(", $._expression, ")", ";"),
         seq(
           "for",
           "(",
           field("initializer", choice($.expression_statement, $.declaration)),
           optional($.condition),
           ";",
-          optional(field("update", $._expression))
+          optional(field("update", $._expression)),
+          ")",
+          $._statement
         )
       ),
     condition: ($) =>
@@ -161,12 +183,11 @@ module.exports = grammar({
         "condition",
         choice(
           $._expression,
-          $.sequence_expression,
           seq(
             $.fully_specified_type,
             field("declarator", $.identifier),
             "=",
-            $.initializer
+            $._initializer
           )
         )
       ),
@@ -180,6 +201,7 @@ module.exports = grammar({
       ),
 
     function_prototype: ($) => seq($.function_declaration, ")"),
+
     case_label: ($) =>
       choice(seq("case", $._expression, ";"), seq("default", ";")),
 
@@ -212,7 +234,13 @@ module.exports = grammar({
       ),
 
     _array_specifier_list: ($) =>
-      repeat1(choice("[]", seq("[", $._constant_expression, "]"))),
+      repeat1(
+        prec.left(
+          PREC.SUBSCRIPT,
+
+          choice("[]", seq("[", $._constant_expression, "]"))
+        )
+      ),
 
     _field_declarator: ($) => choice($.identifier, $.array_declarator),
 
@@ -220,9 +248,14 @@ module.exports = grammar({
       seq(field("declarator", $.identifier), $._array_specifier_list),
 
     type_specifier: ($) =>
-      seq($.primitive_type, optional($._array_specifier_list)),
+      prec(
+        -1,
+        seq($._type_specifier_nonarray, optional($._array_specifier_list))
+      ),
 
     _type_specifier_nonarray: ($) =>
+      // prec.right(
+      // TODO ??
       choice(
         $.primitive_type,
         seq(
@@ -233,6 +266,7 @@ module.exports = grammar({
           "}"
         ),
         $.identifier
+        // )
       ),
 
     primitive_type: ($) =>
@@ -372,7 +406,7 @@ module.exports = grammar({
 
     struct_declarator: ($) => $._field_declarator,
 
-    type_qualifier_list: ($) => repeat1($.type_qualifier),
+    type_qualifier_list: ($) => repeat1(prec.right($.type_qualifier)),
 
     type_qualifier: ($) =>
       choice(
@@ -401,24 +435,28 @@ module.exports = grammar({
         "readonly",
         "writeonly",
         "subroutine",
-        seq("subroutine", "(", $.type_name_list, ")")
+        seq("subroutine", "(", $.type_name_list, ")"),
+        "varying", // 4.6
+        "attribute" // 4.6
       ),
     type_name_list: ($) => commaSep1($.identifier),
 
     layout_qualifier: ($) =>
-      seq(
-        "LAYOUT",
-        "(",
-        seq($.layout_qualifier_id, repeat(seq(",", $.layout_qualifier_id))),
-        ")"
-      ),
+      seq("layout", "(", seq(commaSep1($.layout_qualifier_id)), ")"),
+
     layout_qualifier_id: ($) =>
+      // prec(
+      //   -1,
       choice(
-        seq(
-          field("declarator", $.identifier),
-          optional(seq("=", field("value", $._constant_expression)))
+        prec.right(
+          PREC.ASSIGNMENT,
+          seq(
+            field("declarator", $.identifier),
+            optional(seq("=", field("value", $._constant_expression)))
+          )
         ),
         "shared"
+        // )
       ),
     precision_qualifier: ($) => choice("highp", "mediump", "lowp"),
     interpolation_qualifier: ($) => choice("smooth", "flat", "noperspective"),
@@ -484,8 +522,6 @@ module.exports = grammar({
           choice(seq($._expression, "++"), seq($._expression, "--"))
         )
       ),
-    sequence_expression: ($) =>
-      prec(PREC.SEQUENCE, seq("(", $.comma_expression, ")")),
 
     parenthesized_expression: ($) =>
       prec(PREC.GROUPING, seq("(", $._expression, ")")),
@@ -496,7 +532,7 @@ module.exports = grammar({
         seq(
           field("array", $._expression),
           "[",
-          field("index", $.comma_expression),
+          field("index", $._expression),
           "]"
         )
       ),
@@ -513,12 +549,12 @@ module.exports = grammar({
         seq(
           field("function", choice($.type_specifier, $._expression)),
           "(",
-          optional(seq("void", $.function_call_parameter_list)),
+          optional(choice("void", $.function_call_parameter_list)),
           ")"
         )
       ),
 
-    comma_expression: ($) => commaSep1($._expression),
+    comma_expression: ($) => prec.left(PREC.SEQUENCE, commaSep2($._expression)),
 
     function_call_parameter_list: ($) => commaSep1($._expression),
 
@@ -567,19 +603,9 @@ module.exports = grammar({
 
     _constant_expression: ($) =>
       choice(
-        $.unary_expression,
-        $.update_expression,
         $.binary_expression,
-        $.call_expression,
-        $.field_expression,
         $.conditional_expression,
-        $.subscript_expression,
-        $.parenthesized_expression,
-        $.sequence_expression,
-        $.identifier,
-        $.number_literal,
-        "true",
-        "false"
+        $._assignment_left_expression
       ),
     _assignment_left_expression: ($) =>
       choice(
@@ -631,6 +657,10 @@ function commaSep(rule) {
 
 function commaSep1(rule) {
   return seq(rule, repeat(seq(",", rule)));
+}
+
+function commaSep2(rule) {
+  return seq(rule, repeat1(seq(",", rule)));
 }
 
 function commaSepTrailing(recurSymbol, rule) {
