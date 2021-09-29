@@ -3,10 +3,10 @@ WIP Treesitter parser for GLSL
 
 
 # Current status:
-[ ]Compile without conflict and can generate tree without error, but more test is still needed.
-[ ]Also some refactor for node name is needed.
-[ ]Highlight support.
-[ ]Preprocessors support.
+- [ ] Compile without conflict and can generate tree without error, but more test is still needed.
+- [ ] Also some refactor for node name is needed.
+- [ ] Highlight support.
+- [ ] Preprocessors support.
 
 
 # References: 
